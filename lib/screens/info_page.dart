@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:stocks_app/stock_graph.dart';
-import 'bsecodes.dart';
+import 'package:stocks_app/data/stock.dart';
+import 'package:stocks_app/data/stock_day.dart';
+import 'package:stocks_app/ui/stock_graph.dart';
+import 'package:stocks_app/data/stocksData.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:hive/hive.dart';
+import 'package:intl/intl.dart';
+// import 'package:stocks_app/data/stockDayDataModel.dart';
+// import 'package:stocks_app/data/stockDataModel.dart';
 
-Map data = {};
-Map recentData = {};
-Map lastData = {};
+StockModel data;
+StockDayModel recentData;
+StockDayModel lastData;
 bool dataFetched = false;
 List<StockSeries> dataList = [];
+// Hive Box
+var _box = Hive.box<StockModel>('stocks');
+var _fav = Hive.box('fav_stocks');
 
 class Info extends StatefulWidget {
   String name;
@@ -35,22 +45,65 @@ class _InfoState extends State<Info> {
 
   void getstock() async {
     try {
-      Map dataMap = await stock.getdata(widget.code);
-      setState(
-        () {
-          data = dataMap;
-          for (var c = 0; c < 30; c++) {
-            dataList.add(
-              new StockSeries(
-                  date: data["data$c"]["date"], close: data["data$c"]["close"]),
-            );
-          }
-          recentData = data["data0"];
-          lastData = data["data1"];
-          print(recentData["dqtq"]);
-          dataFetched = true;
-        },
-      );
+      if (_box.get(widget.code) == null) {
+        StockModel dataMap = await stock.getdata(widget.code);
+        setState(
+          () {
+            data = dataMap;
+            for (var c = 0; c < 30; c++) {
+              dataList.add(
+                new StockSeries(
+                    date: data.stockData["data$c"].date,
+                    close: data.stockData["data$c"].close),
+              );
+            }
+            recentData = data.stockData["data0"];
+            lastData = data.stockData["data1"];
+            // print(recentData.dqtq);
+            dataFetched = true;
+            _box.put(dataMap.code, dataMap);
+          },
+        );
+      } else {
+        StockModel dataMap = _box.get(widget.code);
+        setState(
+          () {
+            data = dataMap;
+            for (var c = 0; c < 30; c++) {
+              dataList.add(
+                new StockSeries(
+                    date: data.stockData["data$c"].date,
+                    close: data.stockData["data$c"].close),
+              );
+            }
+            recentData = data.stockData["data0"];
+            lastData = data.stockData["data1"];
+            // print(recentData.dqtq);
+            dataFetched = true;
+          },
+        );
+        if (_box.get(widget.code).date !=
+            DateFormat("yy-MM-dd").format(DateTime.now())) {
+          StockModel dataMap = await stock.getdata(widget.code);
+          setState(
+            () {
+              data = dataMap;
+              for (var c = 0; c < 30; c++) {
+                dataList.add(
+                  new StockSeries(
+                      date: data.stockData["data$c"].date,
+                      close: data.stockData["data$c"].close),
+                );
+              }
+              recentData = data.stockData["data0"];
+              lastData = data.stockData["data1"];
+              // print(recentData.dqtq);
+              dataFetched = true;
+              _box.put(dataMap.code, dataMap);
+            },
+          );
+        }
+      }
       // print(data["data0"].toString());
     } catch (e) {
       print(e);
@@ -67,8 +120,9 @@ class _InfoState extends State<Info> {
 
   @override
   Widget build(BuildContext context) {
+    ScreenUtil.init(context, width: 720, height: 1440, allowFontScaling: true);
     return Scaffold(
-      backgroundColor: Colors.pink[100],
+      backgroundColor: Colors.blue[100],
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -83,10 +137,17 @@ class _InfoState extends State<Info> {
         actions: <Widget>[
           IconButton(
               icon: Icon(
-                Icons.favorite_border,
+                _fav.get(widget.code) == true
+                    ? Icons.favorite
+                    : Icons.favorite_border,
                 color: Colors.grey,
               ),
-              onPressed: null),
+              onPressed: () {
+                _fav.get(widget.code) == true
+                    ? _fav.delete(widget.code)
+                    : _fav.put(widget.code, true);
+                setState(() {});
+              }),
           IconButton(
               icon: Icon(
                 Icons.more_vert,
@@ -146,8 +207,7 @@ class _InfoState extends State<Info> {
                         ),
                         Container(
                           color: Colors.white,
-                          width: 100,
-                          height: 45,
+                          height: 70.h,
                           padding: EdgeInsets.fromLTRB(20, 25, 50, 0),
                           child: ClipRRect(
                             borderRadius: BorderRadius.all(
@@ -156,24 +216,24 @@ class _InfoState extends State<Info> {
                             child: Container(
                               child: LinearProgressIndicator(
                                 backgroundColor: Colors.grey[200],
-                                value: recentData["dqtq"] / 100,
+                                value: recentData.dqtq / 100,
                               ),
                             ),
                           ),
                         ),
                         Container(
                           color: Colors.white,
-                          height: 80,
+                          height: 130.h,
                           child: Row(
                             children: <Widget>[
                               Padding(
                                 padding:
                                     const EdgeInsets.fromLTRB(22, 10, 6, 10),
                                 child: Text(
-                                  '${recentData["dqtq"].toString()}%',
+                                  '${recentData.dqtq.toString()}%',
                                   style: TextStyle(
                                       fontSize: 35,
-                                      color: Colors.pink,
+                                      color: Colors.blue,
                                       fontWeight: FontWeight.bold),
                                 ),
                               ),
@@ -198,9 +258,9 @@ class _InfoState extends State<Info> {
                           padding: const EdgeInsets.fromLTRB(10, 20, 6, 20),
                           child: Card(
                             elevation: 2,
-                            color: Colors.pink[50],
+                            color: Colors.blue[50],
                             child: SizedBox(
-                              width: 140,
+                              width: 220.w,
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Column(
@@ -208,20 +268,20 @@ class _InfoState extends State<Info> {
                                       MainAxisAlignment.spaceEvenly,
                                   children: <Widget>[
                                     Text(
-                                      recentData["open"].toString(),
+                                      recentData.open.toString(),
                                       style: TextStyle(
                                           color: Colors.black87,
                                           fontSize: 32,
                                           fontWeight: FontWeight.bold),
                                     ),
                                     Text(
-                                      (recentData["open"] - lastData["open"])
+                                      (recentData.open - lastData.open)
                                           .toStringAsFixed(2),
                                       style: TextStyle(
-                                          color: recentData["open"] >=
-                                                  lastData["open"]
-                                              ? Colors.green
-                                              : Colors.red,
+                                          color:
+                                              recentData.open >= lastData.open
+                                                  ? Colors.green
+                                                  : Colors.red,
                                           fontSize: 15,
                                           fontWeight: FontWeight.bold),
                                     ),
@@ -242,9 +302,9 @@ class _InfoState extends State<Info> {
                           padding: const EdgeInsets.fromLTRB(10, 20, 6, 20),
                           child: Card(
                             elevation: 2,
-                            color: Colors.pink[50],
+                            color: Colors.blue[50],
                             child: SizedBox(
-                              width: 140,
+                              width: 220.w,
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Column(
@@ -252,20 +312,20 @@ class _InfoState extends State<Info> {
                                       MainAxisAlignment.spaceEvenly,
                                   children: <Widget>[
                                     Text(
-                                      recentData["high"].toString(),
+                                      recentData.high.toString(),
                                       style: TextStyle(
                                           color: Colors.black87,
                                           fontSize: 32,
                                           fontWeight: FontWeight.bold),
                                     ),
                                     Text(
-                                      (recentData["high"] - lastData["high"])
+                                      (recentData.high - lastData.high)
                                           .toStringAsFixed(2),
                                       style: TextStyle(
-                                          color: recentData["high"] >=
-                                                  lastData["high"]
-                                              ? Colors.green
-                                              : Colors.red,
+                                          color:
+                                              recentData.high >= lastData.high
+                                                  ? Colors.green
+                                                  : Colors.red,
                                           fontSize: 15,
                                           fontWeight: FontWeight.bold),
                                     ),
@@ -286,9 +346,9 @@ class _InfoState extends State<Info> {
                           padding: const EdgeInsets.fromLTRB(10, 20, 6, 20),
                           child: Card(
                             elevation: 2,
-                            color: Colors.pink[50],
+                            color: Colors.blue[50],
                             child: SizedBox(
-                              width: 140,
+                              width: 220.w,
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Column(
@@ -296,18 +356,17 @@ class _InfoState extends State<Info> {
                                       MainAxisAlignment.spaceEvenly,
                                   children: <Widget>[
                                     Text(
-                                      recentData["low"].toString(),
+                                      recentData.low.toString(),
                                       style: TextStyle(
                                           color: Colors.black87,
                                           fontSize: 32,
                                           fontWeight: FontWeight.bold),
                                     ),
                                     Text(
-                                      (recentData["low"] - lastData["low"])
+                                      (recentData.low - lastData.low)
                                           .toStringAsFixed(2),
                                       style: TextStyle(
-                                          color: recentData["low"] >=
-                                                  lastData["low"]
+                                          color: recentData.low >= lastData.low
                                               ? Colors.green
                                               : Colors.red,
                                           fontSize: 15,
@@ -330,9 +389,9 @@ class _InfoState extends State<Info> {
                           padding: const EdgeInsets.fromLTRB(10, 20, 6, 20),
                           child: Card(
                             elevation: 2,
-                            color: Colors.pink[50],
+                            color: Colors.blue[50],
                             child: SizedBox(
-                              width: 140,
+                              width: 220.w,
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Column(
@@ -340,20 +399,20 @@ class _InfoState extends State<Info> {
                                       MainAxisAlignment.spaceEvenly,
                                   children: <Widget>[
                                     Text(
-                                      recentData["close"].toString(),
+                                      recentData.close.toString(),
                                       style: TextStyle(
                                           color: Colors.black87,
                                           fontSize: 32,
                                           fontWeight: FontWeight.bold),
                                     ),
                                     Text(
-                                      (recentData["close"] - lastData["close"])
+                                      (recentData.close - lastData.close)
                                           .toStringAsFixed(2),
                                       style: TextStyle(
-                                          color: recentData["close"] >=
-                                                  lastData["close"]
-                                              ? Colors.green
-                                              : Colors.red,
+                                          color:
+                                              recentData.close >= lastData.close
+                                                  ? Colors.green
+                                                  : Colors.red,
                                           fontSize: 15,
                                           fontWeight: FontWeight.bold),
                                     ),
@@ -374,9 +433,9 @@ class _InfoState extends State<Info> {
                           padding: const EdgeInsets.fromLTRB(10, 20, 10, 20),
                           child: Card(
                             elevation: 2,
-                            color: Colors.pink[50],
+                            color: Colors.blue[50],
                             child: SizedBox(
-                              width: 200,
+                              width: 380.w,
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Column(
@@ -384,19 +443,19 @@ class _InfoState extends State<Info> {
                                       MainAxisAlignment.spaceEvenly,
                                   children: <Widget>[
                                     Text(
-                                      recentData["turn"].toString(),
+                                      recentData.turn.toString(),
                                       style: TextStyle(
                                           color: Colors.black87,
                                           fontSize: 32,
                                           fontWeight: FontWeight.bold),
                                     ),
                                     Text(
-                                      '${((recentData["turn"] - lastData["turn"]) / lastData["turn"]).toStringAsFixed(2)}%',
+                                      '${((recentData.turn - lastData.turn) / lastData.turn).toStringAsFixed(2)}%',
                                       style: TextStyle(
-                                          color: recentData["turn"] >=
-                                                  lastData["turn"]
-                                              ? Colors.green
-                                              : Colors.red,
+                                          color:
+                                              recentData.turn >= lastData.turn
+                                                  ? Colors.green
+                                                  : Colors.red,
                                           fontSize: 15,
                                           fontWeight: FontWeight.bold),
                                     ),
@@ -465,7 +524,7 @@ class _InfoState extends State<Info> {
                           child: Container(
                             color: Colors.white,
                             child: SizedBox(
-                              height: 400,
+                              height: 650.h,
                               width: MediaQuery.of(context).size.width,
                               child: Padding(
                                 padding: const EdgeInsets.fromLTRB(
@@ -477,8 +536,7 @@ class _InfoState extends State<Info> {
                         ),
                         Container(
                           color: Colors.white,
-                          width: 100,
-                          height: 45,
+                          height: 70.h,
                           padding: EdgeInsets.fromLTRB(20, 25, 50, 0),
                           child: ClipRRect(
                             borderRadius: BorderRadius.all(
@@ -493,7 +551,7 @@ class _InfoState extends State<Info> {
                         ),
                         Container(
                           color: Colors.white,
-                          height: 80,
+                          height: 130.h,
                           child: Row(
                             children: <Widget>[
                               Padding(
@@ -503,7 +561,7 @@ class _InfoState extends State<Info> {
                                   '       ',
                                   style: TextStyle(
                                       fontSize: 35,
-                                      color: Colors.pink,
+                                      color: Colors.blue,
                                       fontWeight: FontWeight.bold),
                                 ),
                               ),
@@ -528,9 +586,9 @@ class _InfoState extends State<Info> {
                           padding: const EdgeInsets.fromLTRB(10, 20, 6, 20),
                           child: Card(
                             elevation: 2,
-                            color: Colors.pink[50],
+                            color: Colors.blue[50],
                             child: SizedBox(
-                              width: 140,
+                              width: 220.w,
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Column(
@@ -540,7 +598,7 @@ class _InfoState extends State<Info> {
                                     CircularProgressIndicator(
                                       valueColor:
                                           new AlwaysStoppedAnimation<Color>(
-                                              Colors.pink[100]),
+                                              Colors.blue[100]),
                                     )
                                   ],
                                 ),
@@ -552,9 +610,9 @@ class _InfoState extends State<Info> {
                           padding: const EdgeInsets.fromLTRB(10, 20, 6, 20),
                           child: Card(
                             elevation: 2,
-                            color: Colors.pink[50],
+                            color: Colors.blue[50],
                             child: SizedBox(
-                              width: 140,
+                              width: 220.w,
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Column(
@@ -564,7 +622,7 @@ class _InfoState extends State<Info> {
                                     CircularProgressIndicator(
                                       valueColor:
                                           new AlwaysStoppedAnimation<Color>(
-                                              Colors.pink[100]),
+                                              Colors.blue[100]),
                                     )
                                   ],
                                 ),
@@ -576,9 +634,9 @@ class _InfoState extends State<Info> {
                           padding: const EdgeInsets.fromLTRB(10, 20, 6, 20),
                           child: Card(
                             elevation: 2,
-                            color: Colors.pink[50],
+                            color: Colors.blue[50],
                             child: SizedBox(
-                              width: 140,
+                              width: 220.w,
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Column(
@@ -588,7 +646,7 @@ class _InfoState extends State<Info> {
                                     CircularProgressIndicator(
                                       valueColor:
                                           new AlwaysStoppedAnimation<Color>(
-                                              Colors.pink[100]),
+                                              Colors.blue[100]),
                                     )
                                   ],
                                 ),
@@ -600,9 +658,9 @@ class _InfoState extends State<Info> {
                           padding: const EdgeInsets.fromLTRB(10, 20, 6, 20),
                           child: Card(
                             elevation: 2,
-                            color: Colors.pink[50],
+                            color: Colors.blue[50],
                             child: SizedBox(
-                              width: 140,
+                              width: 220.w,
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Column(
@@ -612,7 +670,7 @@ class _InfoState extends State<Info> {
                                     CircularProgressIndicator(
                                       valueColor:
                                           new AlwaysStoppedAnimation<Color>(
-                                              Colors.pink[100]),
+                                              Colors.blue[100]),
                                     )
                                   ],
                                 ),
@@ -624,9 +682,9 @@ class _InfoState extends State<Info> {
                           padding: const EdgeInsets.fromLTRB(10, 20, 10, 20),
                           child: Card(
                             elevation: 2,
-                            color: Colors.pink[50],
+                            color: Colors.blue[50],
                             child: SizedBox(
-                              width: 200,
+                              width: 380.w,
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Column(
@@ -636,7 +694,7 @@ class _InfoState extends State<Info> {
                                     CircularProgressIndicator(
                                       valueColor:
                                           new AlwaysStoppedAnimation<Color>(
-                                              Colors.pink[100]),
+                                              Colors.blue[100]),
                                     )
                                   ],
                                 ),

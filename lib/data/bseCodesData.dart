@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-
 const List<Object> bse_codes = [
   {'ABB India Limited EOD Prices': 'BOM500002'},
   {'AEGIS LOGISTICS LTD. EOD Prices': 'BOM500003'},
@@ -9620,34 +9617,3 @@ const List<String> bse_names = [
   "BSE Utilities",
   "BSE Liquid Rate Index"
 ];
-
-class StockData {
-  List bseNames;
-  Future getdata(String code) async {
-    String fetchUrl =
-        "https://www.quandl.com/api/v3/datasets/BSE/$code/data.json?api_key=wrCX6Fs2x_M-ZyJ8aPQX";
-    http.Response response = await http.get(fetchUrl);
-    if (response.statusCode == 200) {
-      var fetchdata = jsonDecode(response.body);
-      Map datasetData = fetchdata["dataset_data"];
-      List data = datasetData["data"];
-      Map totalData = {};
-      for (var i = 0; i < 30; i++) {
-        Map dataMap = {
-          'date': data[i][0].toString(),
-          'open': data[i][1],
-          'high': data[i][2],
-          'low': data[i][3],
-          'close': data[i][4],
-          'turn': data[i][8],
-          'dqtq': data[i][10]
-        };
-        totalData["data$i"] = dataMap;
-      }
-      return totalData;
-    } else {
-      print(response.statusCode);
-      throw 'cant fetch data';
-    }
-  }
-}
